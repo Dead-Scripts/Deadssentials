@@ -1,0 +1,297 @@
+--------------------
+--- Dedssentials ---
+--------------------
+
+RegisterNetEvent("Deadssentials:AOPChange")
+
+--@desc Sends a message to the client
+--@param src The player you want to send the message to
+--@param msg The message to send
+function sendMsg(src, msg)
+  TriggerClientEvent('chat:addMessage', src, {args = {Config.Prefix .. msg} });
+end
+
+--@desc Checks if a passed ID is an online player
+--@param playerID The ID you want to check.
+function IsPlayerOnline(playerID)
+  local playerFound = false
+
+  for _, ID in pairs(GetPlayers()) do
+    if tonumber(ID) == tonumber(playerID) then
+      playerFound = true
+    end
+  end
+
+  if playerFound then
+    return true
+  else
+    return false
+  end
+end
+
+-- @desc Check if value is an integer
+-- @param number the variable you want to check 
+function IsInt(number)
+  if number == tostring(tonumber(number)) then
+      return true
+  else
+      return false
+  end
+end
+
+function GetAOP()
+  return currentAOP
+end
+
+function GetPeaceTimeStatus()
+  return peacetime
+end
+
+--Makes sure resource name is 'Deadssentials' so any scripts using exports won't throw errors.
+if GetCurrentResourceName() ~= "Deadssentials" then
+  print("[" .. GetCurrentResourceName() .. "] ^3WARNING: This resource needs to be named '^0Badssentials^3' in order for everything to function correctly! Please change this resource's name back to '^0Badssentials^3'!")
+end
+
+RegisterCommand(Config.ScreenAffects.AnnounceCommand, function(source, args, raw) 
+  local src = source;
+  if IsPlayerAceAllowed(src, Config.ScreenAffects.AcePermission) then 
+    -- Allowed to use /announce 
+    if #args > 0 then 
+      local ann = table.concat(args, " ");
+      TriggerClientEvent('Deadssentials:Announce', -1, ann);
+    end
+  end
+end)
+
+Citizen.CreateThread(function()
+  while true do 
+    Wait(1000);
+    TriggerClientEvent('Deadssentials:SetAOP', -1, currentAOP);
+    TriggerClientEvent('Deadssentials:SetPT', -1, peacetime);
+    local time = format_time(os.time(), "%H:%M");
+    local date = format_time(os.time(), "%m %d %Y");
+    local timeHour = split(time, ":")[1]
+    local dateData = split(date, " ");
+    TriggerClientEvent('Deadssentials:SetMonth', -1, dateData[1])
+    TriggerClientEvent('Deadssentials:SetDay', -1, dateData[2])
+    TriggerClientEvent('Deadssentials:SetYear', -1, dateData[3])
+    if tonumber(timeHour) > 12 then 
+      local timeStr = tostring(tonumber(timeHour) - 12) .. ":" .. split(time, ":")[2]
+      TriggerClientEvent('Deadssentials:SetTime', -1, timeStr);
+    end
+    if timeHour == "00" then 
+      local timeStr = "12" .. ":" .. split(time, ":")[2]
+      TriggerClientEvent('Deadssentials:SetTime', -1, timeStr);
+    end 
+    if timeHour ~= "00" and tonumber(timeHour) <= 12 then 
+      TriggerClientEvent('Deadssentials:SetTime', -1, time);
+    end
+  end
+end)
+peacetime = false;
+currentAOP = Config.AOPSystem.DefaultAOP; -- By default 
+RegisterCommand(Config.AOPSystem.AOPCommand, function(source, args, rawCommand)
+  local src = source;
+  if IsPlayerAceAllowed(src, Config.AOPSystem.AOP_AcePermission) then 
+    -- Allowed to use /aop <aop>
+    if #args > 0 then 
+      local oldAOP = currentAOP
+      currentAOP = table.concat(args, " ");
+      sendMsg(src, "You have set the AOP to: " .. currentAOP);
+      TriggerClientEvent('Deadssentials:SetAOP', -1, currentAOP);
+
+      if Config.AOPSystem.aopAnnouncement ~= nil then
+        local aopAnnouncement = Config.AOPSystem.AOP_Announcement
+        aopAnnouncement = aopAnnouncement:gsub("{NEW_AOP}", currentAOP)
+
+        sendMsg(-1, aopAnnouncement)
+      end
+      
+      TriggerEvent("Deadssentials:AOPChange", oldAOP, currentAOP, src)
+    else 
+      -- Not enough arguments
+      sendMsg(src, "^1ERROR: Proper usage: /" .. Config.AOPSystem.AOPCommand .. " <zone>");
+    end
+  else
+    sendMsg(src, "^1ERROR: You do not have permission to change the AOP!");
+  end
+end)
+timersRev = {}
+timersRes = {}
+Citizen.CreateThread(function()
+  while true do 
+    Wait((1000)); -- Each second 
+    for src, timer in pairs(timersRev) do 
+      timersRev[src] = timer - 1;
+      if (timersRev[src] <= 0) then 
+        timersRev[src] = nil;
+      end
+    end
+    for src, timer in pairs(timersRes) do 
+      timersRes[src] = timer - 1;
+      if (timersRes[src] <= 0) then 
+        timersRes[src] = nil;
+      end
+    end
+  end
+end)
+
+if Config.ReviveSystem.enable then
+  RegisterNetEvent("Deadssentials:DeathTrigger")
+  AddEventHandler("Deadssentials:DeathTrigger", function()
+    local src = source;
+    timersRev[src] = Config.ReviveSystem.Revive_Delay;
+    timersRes[src] = Config.ReviveSystem.Respawn_Delay;
+  end)
+  RegisterCommand(Config.ReviveSystem.ReviveCommand, function(source, args, rawCommand)
+    local src = source;
+    if #args == 0 or tonumber(args[1]) == src then 
+      -- Revive themselves
+      if timersRev[src] ~= nil and timersRev[src] >= 0 then 
+        -- They are dead and have a timer 
+        if IsPlayerAceAllowed(src, Config.ReviveSystem.BypassReviveAcePermission) then 
+          -- Can bypass reviving
+          TriggerClientEvent('Deadssentials:RevivePlayer', src);
+        else 
+          -- Cannot bypass reviving, send they need to wait and what their timer is at 
+          local timeLeft = timersRev[src]
+          if timeLeft >= 60 then
+            timeLeft = math.ceil(timeLeft / 60) .. " minute(s)" 
+          else
+            timeLeft = timeLeft .. " seconds"
+          end
+
+          local errorMessage = Config.ReviveSystem.ReviveErrorMessage
+          errorMessage = errorMessage:gsub("{REVIVE_TIME_LEFT}", timeLeft)
+
+          sendMsg(src, errorMessage);
+        end
+      else 
+        -- Their timer is expired or not valid 
+        TriggerClientEvent('Deadssentials:RevivePlayer', src); 
+      end
+    else 
+      -- They are reviving someone else 
+      if IsPlayerAceAllowed(src, Config.ReviveSystem.ReviveOthersAcePermission) then
+        --Checks if arg is number
+        if IsInt(args[1]) then 
+          --checks if a player with ID is online
+          if IsPlayerOnline(args[1]) then
+            local reviveMessage = Config.ReviveSystem.ReviveOthersMessage
+            reviveMessage = reviveMessage:gsub("{PLAYER_NAME}", GetPlayerName(src))
+
+            TriggerClientEvent('Deadssentials:RevivePlayer', tonumber(args[1]));
+            sendMsg(src, "You have revived player ^5" .. GetPlayerName(tonumber(args[1])) .. " ^3successfully!");
+            sendMsg(tonumber(args[1]), reviveMessage);
+          else
+            --Player isn't online
+            sendMsg(src, "^1ERROR: No player with that specified ID is online!");
+          end
+        else
+          --Passed Arg is not integer
+          sendMsg(src, "^1ERROR: You must specify a valid server ID!");
+        end
+      else
+        sendMsg(src, '^1ERROR: You do not have permission to revive others!');
+      end
+    end
+  end)
+  RegisterCommand(Config.ReviveSystem.RespawnCommand, function(source, args, rawCommand)
+    local src = source;
+    if #args == 0 then 
+      -- Respawn themselves
+      if timersRes[src] ~= nil and timersRes[src] >= 0 then 
+        -- They are dead and have a timer 
+        if IsPlayerAceAllowed(src, Config.ReviveSystem.BypassRespawnAcePermission) then 
+          -- Can bypass reviving
+          TriggerClientEvent('Deadssentials:RespawnPlayer', src);
+        else 
+          -- Cannot bypass reviving, send they need to wait and what their timer is at 
+          local timeLeft = timersRes[src]
+          if timeLeft >= 60 then
+            timeLeft = math.ceil(timeLeft / 60) .. " minute(s)" 
+          else
+            timeLeft = timeLeft .. " seconds"
+          end
+
+          local errorMessage = Config.ReviveSystem.RespawnErrorMessage
+          errorMessage = errorMessage:gsub("{RESPAWN_TIME_LEFT}", timeLeft)
+
+          sendMsg(src, errorMessage);
+        end
+      else 
+        -- Their timer is expired or not valid 
+        TriggerClientEvent('Deadssentials:RespawnPlayer', src); 
+      end
+    end 
+  end)
+end
+
+
+RegisterCommand(Config.Misc.Peacetime, function(source, args, rawCommand)
+  local src = source;
+  if IsPlayerAceAllowed(src, Config.Misc.PeacetimeAcePermission) then
+    peacetime = not peacetime;
+    TriggerClientEvent('Deadssentials:SetPT', -1, peacetime);
+    if peacetime then 
+      sendMsg(src, "You have set PeaceTime to ^2ON"); 
+    else 
+      sendMsg(src, "You have set PeaceTime to ^1OFF");
+    end
+  end
+end)
+RegisterCommand(Config.Misc.PT, function(source, args, rawCommand)
+  local src = source;
+  if IsPlayerAceAllowed(src, Config.Misc.PeacetimeAcePermission) then
+    peacetime = not peacetime;
+    TriggerClientEvent('Deadssentials:SetPT', -1, peacetime);
+    if peacetime then 
+      sendMsg(src, "You have set PeaceTime to ^2ON"); 
+    else 
+      sendMsg(src, "You have set PeaceTime to ^1OFF");
+    end
+  end
+end)
+function split(source, sep)
+    local result, i = {}, 1
+    while true do
+        local a, b = source:find(sep)
+        if not a then break end
+        local candidat = source:sub(1, a - 1)
+        if candidat ~= "" then 
+            result[i] = candidat
+        end i=i+1
+        source = source:sub(b + 1)
+    end
+    if source ~= "" then 
+        result[i] = source
+    end
+    return result
+end
+function format_time(timestamp, format, tzoffset, tzname)
+   if tzoffset == "local" then  -- calculate local time zone (for the server)
+      local now = os.time()
+      local local_t = os.date("*t", now)
+      local utc_t = os.date("!*t", now)
+      local delta = (local_t.hour - utc_t.hour)*60 + (local_t.min - utc_t.min)
+      local h, m = math.modf( delta / 60)
+      tzoffset = string.format("%+.4d", 100 * h + 60 * m)
+   end
+   tzoffset = tzoffset or "GMT"
+   format = format:gsub("%%z", tzname or tzoffset)
+   if tzoffset == "GMT" then
+      tzoffset = "+0000"
+   end
+   tzoffset = tzoffset:gsub(":", "")
+
+   local sign = 1
+   if tzoffset:sub(1,1) == "-" then
+      sign = -1
+      tzoffset = tzoffset:sub(2)
+   elseif tzoffset:sub(1,1) == "+" then
+      tzoffset = tzoffset:sub(2)
+   end
+   tzoffset = sign * (tonumber(tzoffset:sub(1,2))*60 +
+tonumber(tzoffset:sub(3,4)))*60
+   return os.date(format, timestamp + tzoffset)
+end
