@@ -170,7 +170,6 @@ if Config.ReviveSystem.enable then
 					foundRespawnLocation = true
 					revivePed(ped);
 					SetEntityCoords(ped, v.x, v.y, v.z, false, false, false, false);
-					SetEntityCoords(entity, xPos, yPos, zPos, xAxis, yAxis, zAxis, clearArea)
 					TriggerEvent('chat:addMessage', {args = {Config.Prefix .. Config.ReviveSystem.RespawnMessage} });
 				end
 			end
@@ -179,7 +178,6 @@ if Config.ReviveSystem.enable then
 			if foundRespawnLocation ~= true then
 				revivePed(ped);
 				SetEntityCoords(ped, Config.ReviveSystem.RespawnLocations.DefaultLocation.x, Config.ReviveSystem.RespawnLocations.DefaultLocation.y, Config.ReviveSystem.RespawnLocations.DefaultLocation.z, false, false, false, false);
-				SetEntityCoords(entity, xPos, yPos, zPos, xAxis, yAxis, zAxis, clearArea)
 				TriggerEvent('chat:addMessage', {args = {Config.Prefix .. Config.ReviveSystem.ReviveMessage} });
 			end
 		end
@@ -306,8 +304,8 @@ Citizen.CreateThread(function()
 			if IsControlPressed(0, 106) then
                 ShowInfo("~r~Peacetime is enabled. ~n~~s~You can not shoot.")
             end
-            SetPlayerCanDoDriveBy(player, false)
-            DisablePlayerFiring(player, true)
+            SetPlayerCanDoDriveBy(PlayerId(), false)
+            DisablePlayerFiring(PlayerId(), true)
             DisableControlAction(0, 140) -- Melee R
 		end
 		for _, v in pairs(Config.Displays) do 
